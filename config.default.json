@@ -1,0 +1,15 @@
+{
+  "service_name": "es",
+  "database": {
+    "user": "postgres",
+    "password": "123456",
+    "database": "postgres",
+    "address": "localhost:5432"
+  },
+  "event_database": {
+    "user": "postgres",
+    "password": "123456",
+    "database": "postgres",
+    "address": "localhost:5433"
+  }
+}
