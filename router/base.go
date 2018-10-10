@@ -3,9 +3,9 @@ package router
 import (
 	"time"
 
-	"git.hocngay.com/hocngay/event-sourcing/config"
-	"git.hocngay.com/hocngay/event-sourcing/controller"
 	"github.com/gin-gonic/gin"
+	"github.com/minhthuy30197/event_sourcing/config"
+	"github.com/minhthuy30197/event_sourcing/controller"
 )
 
 type JsonDataRoute struct {

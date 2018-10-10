@@ -1,8 +1,8 @@
 package router
 
 import (
-	"git.hocngay.com/hocngay/event-sourcing/controller"
 	"github.com/gin-gonic/gin"
+	"github.com/minhthuy30197/event_sourcing/controller"
 )
 
 func setupCourseRoutes(c *controller.Controller, api *gin.RouterGroup) {

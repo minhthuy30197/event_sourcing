@@ -2,14 +2,11 @@ package controller
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
-	"reflect"
 	"time"
-
-	"git.hocngay.com/hocngay/event-sourcing/model"
+	"github.com/minhthuy30197/event_sourcing/model"
 )
-
-var eventRegistry = map[string]reflect.Type{}
 
 func (c *Controller) SaveEvent(ev model.Event) error {
 	tx, err := c.EventDB.Begin()
@@ -32,14 +29,19 @@ func (c *Controller) SaveEvent(ev model.Event) error {
 		log.Println(err)
 		log.Println("Insert loi")
 		tx.Rollback()
+		tx.Commit()
 		return err
 	}
+	tx.Rollback()
+	return err
 
-	// TODO: Apply event. Neu loi thi rollback
+	// Apply event. Neu loi thi rollback
 	err = ev.Apply(c.Config)
 	if err != nil {
 		tx.Rollback()
+		tx.Commit()
 		log.Println("Loi khi update bang read")
+		return err 
 	}
 
 	return tx.Commit()
@@ -60,7 +62,6 @@ func BuildBaseEvent(aggregateID, userID, eventType string, data interface{}, ver
 }
 
 func Encode(event model.Event) (model.EventSource, error) {
-
 	ret := model.EventSource{}
 	var err error
 
@@ -80,56 +81,23 @@ func Encode(event model.Event) (model.EventSource, error) {
 	return ret, nil
 }
 
-func Register(events ...model.EventInterface) {
-	for _, event := range events {
-		eventRegistry[event.AggregateType()] = reflect.TypeOf(event)
-	}
-	log.Println(eventRegistry)
-}
-
-// Decode return a deserialized event, ready to user
-func Decode(event model.EventSource) (model.Event, error) {
-	// deserialize json
+// Decode 
+func Decode(event model.EventSource, tmpStruct interface{}) (model.Event, error) {
 	var err error
 	ret := model.Event{}
 
-	log.Println("-------------- den day roi 1") 
-
-	// reflexion magic
-	dataPointer := reflect.New(eventRegistry["AddTeacherEvent"])
-	log.Println("-------------- den day roi 2")
-	dataValue := dataPointer.Elem()
-	var data map[string]interface{}
-	log.Println("-------------- den day roi 3")
-	array := []byte(event.Data[0])
-	err = json.Unmarshal(array, &data)
-	if err != nil {
-		return model.Event{}, err
-	}
-
-	log.Println("-------------- den day roi 4")
-	n := dataValue.NumField()
-	for i := 0; i < n; i++ {
-		field := dataValue.Type().Field(i)
-		jsonName := field.Tag.Get("json")
-		if jsonName == "" {
-			jsonName = field.Name
-		}
-		log.Println(jsonName)
-		val := dataValue.FieldByName(field.Name)
-		val.Set(reflect.ValueOf(data[jsonName]))
-		log.Println(data[jsonName])
-	}
-	log.Println("-------------- den day roi 5")
-	ret.Time = event.Time
 	ret.AggregateId = event.AggregateId
 	ret.EventType = event.EventType
-	ret.Version = event.Version
 	ret.Revision = event.Revision
+	ret.Time = event.Time
 	ret.UserID = event.UserID
+	ret.Version = event.Version
 
-	dataInterface := dataValue.Interface()
-	ret.Data = dataInterface
+	err = json.Unmarshal([]byte(event.Data[0]), &tmpStruct)
+	if err != nil {
+		fmt.Println("error:", err)
+	}
+	ret.Data = tmpStruct
 
 	return ret, nil
 }
@@ -146,7 +114,7 @@ func (c *Controller) Events(aggregateID string) ([]model.Event, error) {
 	}
 
 	for _, event := range events {
-		ev, err := Decode(event)
+		ev, err := Decode(event, model.AddTeacherEvent{})
 		if err != nil {
 			log.Println(err)
 			return []model.Event{}, err

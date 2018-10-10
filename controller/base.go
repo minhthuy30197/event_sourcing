@@ -1,8 +1,8 @@
 package controller
 
 import (
-	"git.hocngay.com/hocngay/event-sourcing/config"
 	"github.com/go-pg/pg"
+	"github.com/minhthuy30197/event_sourcing/config"
 )
 
 type Controller struct {

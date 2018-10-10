@@ -26,6 +26,15 @@ func CheckStringElementInSlice(list []string, str string) bool {
 	return false
 }
 
+func GetPosStringElementInSlice(list []string, str string) int {
+	for i, item := range list {
+		if item == str {
+			return i
+		}
+	}
+	return -1
+}
+
 func HashPassword(password string) (string, error) {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
 	return string(bytes), err

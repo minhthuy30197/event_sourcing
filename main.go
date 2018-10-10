@@ -3,11 +3,11 @@ package main
 import (
 	"os"
 
-	"git.hocngay.com/hocngay/event-sourcing/config"
-	"git.hocngay.com/hocngay/event-sourcing/controller"
-	"git.hocngay.com/hocngay/event-sourcing/model"
-	"git.hocngay.com/hocngay/event-sourcing/router"
 	"github.com/gin-gonic/gin"
+	"github.com/minhthuy30197/event_sourcing/config"
+	"github.com/minhthuy30197/event_sourcing/controller"
+	"github.com/minhthuy30197/event_sourcing/model"
+	"github.com/minhthuy30197/event_sourcing/router"
 )
 
 // @title Service Auth
@@ -16,8 +16,6 @@ import (
 // @host localhost:8080
 
 func main() {
-	controller.Register(model.AddTeacherEvent{})
-
 	ginMode := os.Getenv("GIN_MODE")
 
 	r := setupMiddleware(ginMode)
@@ -32,7 +30,7 @@ func main() {
 	db := model.ConnectDb(dbConfig.User, dbConfig.Password, dbConfig.Database, dbConfig.Address)
 	defer db.Close()
 	c.DB = db
-	
+
 	eventDbConfig := config.EventDatabase
 	eventDb := model.ConnectDb(eventDbConfig.User, eventDbConfig.Password, eventDbConfig.Database, eventDbConfig.Address)
 	defer eventDb.Close()

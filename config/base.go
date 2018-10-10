@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 
-	"git.hocngay.com/hocngay/gin-template/helper"
+	"github.com/minhthuy30197/event_sourcing/helper"
 )
 
 type Config struct {
