@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"time"
 	"errors"
 	"log"
 	"net/http"
@@ -14,13 +15,20 @@ import (
 // @Failure 500 {object} model.HTTPError
 // @Router /auth/get-users [get]
 func (c *Controller) AddTeacherToClass(ctx *gin.Context) {
-	log.Println("------------------------")
 	var setTeacher model.SetTeacher
 	err := ctx.ShouldBindJSON(&setTeacher)
 	if err != nil {
 		model.NewError(ctx, http.StatusBadRequest, err)
 		return
 	}
+
+	// Lấy version 
+	var version int32
+	_, err = c.DB.Query(&version, `SELECT version from course.class where course_id = ?`, setTeacher.CourseID)
+	if err != nil {
+		model.NewError(ctx, http.StatusBadRequest, errors.New("Không lay duoc thong tin giang vien."))
+		return
+	} 
 
 	// Lay thong tin teacher can them
 	var newTeacher model.TeacherInfo
@@ -35,7 +43,7 @@ func (c *Controller) AddTeacherToClass(ctx *gin.Context) {
 	addTeacherEvent.Teacher = newTeacher
 	addTeacherEvent.CourseID = setTeacher.CourseID
 	aggregateID := "ClassTeacher_" + setTeacher.CourseID
-	baseEvent := BuildBaseEvent(aggregateID, "", "TeacherAdded", addTeacherEvent, 1)
+	baseEvent := BuildBaseEvent(aggregateID, "", "TeacherAdded", addTeacherEvent, (version + 1))
 	err = c.SaveEvent(baseEvent)
 	if err != nil {
 		log.Println(err)
@@ -55,8 +63,8 @@ func (c *Controller) AddTeacherToClass(ctx *gin.Context) {
 func (c *Controller) Playback(ctx *gin.Context) {
 	var courseID = ctx.Param("id")
 	var aggregateID = "ClassTeacher_" + courseID
-
-	rs, err := c.Events(aggregateID)
+	var startTime time.Time
+	rs, err := c.Events(aggregateID, startTime, time.Now())
 	if err != nil {
 		log.Println(err)
 		model.NewError(ctx, http.StatusBadRequest, errors.New("Không thể lấy lich su."))
@@ -65,7 +73,7 @@ func (c *Controller) Playback(ctx *gin.Context) {
 
 	class := &model.Class{}
 	for _, event := range rs {
-		class.Transition(event.Data)
+		class.Transition(event)
 	}
 	ctx.JSON(http.StatusOK, class)
 }
@@ -84,6 +92,14 @@ func (c *Controller) RemoveTeacherFromClass(ctx *gin.Context) {
 		return
 	}
 
+	// Lấy version 
+	var version int32
+	_, err = c.DB.Query(&version, `SELECT version from course.class where course_id = ?`, setTeacher.CourseID)
+	if err != nil {
+		model.NewError(ctx, http.StatusBadRequest, errors.New("Không lay duoc thong tin giang vien."))
+		return
+	} 
+
 	// Lay thong tin teacher can them
 	var newTeacher model.TeacherInfo
 	_, err = c.DB.Query(&newTeacher, `select * from course.teacher where id = ?`, setTeacher.TeacherID)
@@ -97,7 +113,7 @@ func (c *Controller) RemoveTeacherFromClass(ctx *gin.Context) {
 	removeTeacherEvent.Teacher = newTeacher
 	removeTeacherEvent.CourseID = setTeacher.CourseID
 	aggregateID := "ClassTeacher_" + setTeacher.CourseID
-	baseEvent := BuildBaseEvent(aggregateID, "", "TeacherRemoved", removeTeacherEvent, 1)
+	baseEvent := BuildBaseEvent(aggregateID, "", "TeacherRemoved", removeTeacherEvent, (version + 1))
 	err = c.SaveEvent(baseEvent)
 	if err != nil {
 		log.Println(err)
@@ -136,9 +152,21 @@ func (c *Controller) GetTeachersOfClass(ctx *gin.Context) {
 
 func (c *Controller) GetHistory(ctx *gin.Context) {
 	var courseID = ctx.Param("id")
+	var getHistoryRequest model.GetHistoryRequest
+	err := ctx.ShouldBindJSON(&getHistoryRequest)
+	if err != nil {
+		model.NewError(ctx, http.StatusBadRequest, err)
+		return
+	}
 	var aggregateID = "ClassTeacher_" + courseID
-
-	rs, err := c.Events(aggregateID)
+	startTime, _ := time.Parse(time.RFC3339Nano, getHistoryRequest.StartTime)
+	endTime, err := time.Parse(time.RFC3339Nano, getHistoryRequest.EndTime)
+	if err != nil {
+		endTime = time.Now()
+	}
+	log.Println(endTime)
+	log.Println(startTime)
+	rs, err := c.Events(aggregateID, startTime, endTime)
 	if err != nil {
 		log.Println(err)
 		model.NewError(ctx, http.StatusBadRequest, errors.New("Không thể lấy lich su."))

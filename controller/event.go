@@ -2,9 +2,12 @@ package controller
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"time"
+
+	"github.com/go-pg/pg"
 	"github.com/minhthuy30197/event_sourcing/model"
 )
 
@@ -14,6 +17,16 @@ func (c *Controller) SaveEvent(ev model.Event) error {
 		return err
 	}
 
+	// Kiem tra version
+	var version int32
+	_, err = c.EventDB.Query(&version, `SELECT version FROM es.event_source WHERE aggregate_id = ? ORDER BY time DESC LIMIT 1`, ev.AggregateId)
+	if err != nil {
+		return err
+	}
+	if (version + 1) != ev.Version {
+		return errors.New("Nội dung này đang được chỉnh sửa bởi một người khác. Vui lòng thử lại sau.")
+	}
+
 	// Encode
 	eventDB, err := Encode(ev)
 	if err != nil {
@@ -21,27 +34,21 @@ func (c *Controller) SaveEvent(ev model.Event) error {
 		return err
 	}
 
-	// TODO: Kiem tra version
-
 	// Insert EventDB
-	err = c.EventDB.Insert(&eventDB)
+	err = tx.Insert(&eventDB)
 	if err != nil {
 		log.Println(err)
 		log.Println("Insert loi")
 		tx.Rollback()
-		tx.Commit()
 		return err
 	}
-	tx.Rollback()
-	return err
 
 	// Apply event. Neu loi thi rollback
 	err = ev.Apply(c.Config)
 	if err != nil {
 		tx.Rollback()
-		tx.Commit()
 		log.Println("Loi khi update bang read")
-		return err 
+		return err
 	}
 
 	return tx.Commit()
@@ -81,8 +88,8 @@ func Encode(event model.Event) (model.EventSource, error) {
 	return ret, nil
 }
 
-// Decode 
-func Decode(event model.EventSource, tmpStruct interface{}) (model.Event, error) {
+// Decode
+func Decode(event model.EventSource) (model.Event, error) {
 	var err error
 	ret := model.Event{}
 
@@ -93,28 +100,47 @@ func Decode(event model.EventSource, tmpStruct interface{}) (model.Event, error)
 	ret.UserID = event.UserID
 	ret.Version = event.Version
 
-	err = json.Unmarshal([]byte(event.Data[0]), &tmpStruct)
-	if err != nil {
-		fmt.Println("error:", err)
+	switch event.EventType {
+	case "TeacherAdded":
+		var tmp model.AddTeacherEvent
+		err = json.Unmarshal([]byte(event.Data[0]), &tmp)
+		if err != nil {
+			fmt.Println("error:", err)
+		}
+		ret.Data = tmp
+	case "TeacherRemoved":
+		var tmp model.RemoveTeacherEvent
+		err = json.Unmarshal([]byte(event.Data[0]), &tmp)
+		if err != nil {
+			fmt.Println("error:", err)
+		}
+		ret.Data = tmp
 	}
-	ret.Data = tmpStruct
 
 	return ret, nil
 }
 
 // Events returns **All** the persisted events
-func (c *Controller) Events(aggregateID string) ([]model.Event, error) {
+func (c *Controller) Events(aggregateID string, startTime, endTime time.Time) ([]model.Event, error) {
 	events := []model.EventSource{}
 	ret := []model.Event{}
 
 	// Lay du lieu tu event sourcing
-	_, err := c.EventDB.Query(&events, `SELECT * FROM es.event_source WHERE aggregate_id = ? ORDER BY time`, aggregateID)
+	c.EventDB.OnQueryProcessed(func(event *pg.QueryProcessedEvent) {
+		query, err := event.FormattedQuery()
+		if err != nil {
+			panic(err)
+		}
+
+		log.Printf("%s %s", time.Since(event.StartTime), query)
+	})
+	_, err := c.EventDB.Query(&events, `SELECT * FROM es.event_source WHERE aggregate_id = ? AND time >= ? AND time <= ? ORDER BY time`,
+		aggregateID, startTime, endTime)
 	if err != nil {
 		return []model.Event{}, err
 	}
-
 	for _, event := range events {
-		ev, err := Decode(event, model.AddTeacherEvent{})
+		ev, err := Decode(event)
 		if err != nil {
 			log.Println(err)
 			return []model.Event{}, err

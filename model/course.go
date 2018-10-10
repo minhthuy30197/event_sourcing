@@ -20,6 +20,9 @@ type Class struct {
 
 	// Tên hiển thị
 	TeacherIDS []string `json:"teacher_ids" pg:",array"`
+
+	// Version
+	Version int32 `json:"version"`
 }
 
 type Course struct {
@@ -34,7 +37,7 @@ type Course struct {
 }
 
 type SetTeacher struct {
-	CourseID string `json:"course_id"`
+	CourseID  string `json:"course_id"`
 	TeacherID string `json:"teacher_id"`
 }
 
@@ -47,7 +50,11 @@ type TeacherInfo struct {
 }
 
 type GetTeacher struct {
-	CourseID string `json:"course_id"`
+	CourseID string        `json:"course_id"`
 	Teachers []TeacherInfo `json:"teachers"`
 }
 
+type GetHistoryRequest struct {
+	StartTime string `json:"start_time"`
+	EndTime string `json:"end_time"`
+}

@@ -2,7 +2,6 @@ package model
 
 import (
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/minhthuy30197/event_sourcing/config"
@@ -57,14 +56,15 @@ func (event AddTeacherEvent) Apply(ev Event, config config.Config) error {
 	err := db.Model(&teacherOfClass).Where(`course_id = ?`, event.CourseID).Select()
 	if err != nil {
 		teacherOfClass.CourseID = event.CourseID
+		teacherOfClass.Version = ev.Version
 		teacherOfClass.TeacherIDS = []string{event.Teacher.Id}
 		err = db.Insert(&teacherOfClass)
 		if err != nil {
 			return err
 		}
 	} else {
-		_, err = db.Exec(`UPDATE course.class SET teacher_ids = array_append(teacher_ids, ?) WHERE course_id = ?`,
-			event.Teacher.Id, event.CourseID)
+		_, err = db.Exec(`UPDATE course.class SET teacher_ids = array_append(teacher_ids, ?), version = ? WHERE course_id = ?`,
+			event.Teacher.Id, ev.Version, event.CourseID)
 		if err != nil {
 			return err
 		}
@@ -93,22 +93,20 @@ func (event RemoveTeacherEvent) Apply(ev Event, config config.Config) error {
 	return nil
 }
 
-func (class *Class) Transition(event interface{}) {
-	switch e := event.(type) {
-	case RemoveTeacherEvent:
-		log.Println("RemoveTeacherEvent")
-		pos := helper.GetPosStringElementInSlice(class.TeacherIDS, e.Teacher.Id)
+func (class *Class) Transition(event Event) {
+	switch event.EventType {
+	case "TeacherRemoved":
+		pos := helper.GetPosStringElementInSlice(class.TeacherIDS, event.Data.(RemoveTeacherEvent).Teacher.Id)
 		if pos != -1 {
-			class.CourseID = e.CourseID
+			class.CourseID = event.Data.(RemoveTeacherEvent).CourseID
 			copy(class.TeacherIDS[pos:], class.TeacherIDS[pos+1:])
 			class.TeacherIDS[len(class.TeacherIDS)-1] = ""
 			class.TeacherIDS = class.TeacherIDS[:len(class.TeacherIDS)-1]
 		}
-	case AddTeacherEvent:
-		log.Println("AddTeacherEvent")
-		class.CourseID = e.CourseID
-		class.TeacherIDS = append(class.TeacherIDS, e.Teacher.Id)
+	case "TeacherAdded":
+		class.CourseID = event.Data.(AddTeacherEvent).CourseID
+		class.TeacherIDS = append(class.TeacherIDS, event.Data.(AddTeacherEvent).Teacher.Id)
 	default:
-		fmt.Printf("%T\n", e)
+		fmt.Printf("nil ne")
 	}
 }
