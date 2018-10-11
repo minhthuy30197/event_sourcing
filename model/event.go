@@ -1,11 +1,9 @@
 package model
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/minhthuy30197/event_sourcing/config"
-	"github.com/minhthuy30197/event_sourcing/helper"
 )
 
 type EventSource struct {
@@ -19,6 +17,14 @@ type EventSource struct {
 	Revision    int32     `json:"revision"`
 }
 
+type Snapshot struct {
+	TableName   struct{}  `json:"table_name" sql:"es.snapshot"`
+	AggregateId string    `json:"aggregate_id"`
+	Time        time.Time `json:"time"`
+	Version     int32     `json:"version"`
+	Data        []string  `json:"data"`
+}
+
 type Event struct {
 	AggregateId string      `json:"aggregate_id"`
 	Time        time.Time   `json:"time" sql:"default:now()"`
@@ -29,8 +35,8 @@ type Event struct {
 	Revision    int32       `json:"revision"`
 }
 
-func (event Event) Apply(c config.Config) error {
-	err := event.Data.(EventInterface).Apply(event, c)
+func (event Event) SaveReadDB(c config.Config) error {
+	err := event.Data.(EventInterface).SaveReadDB(event, c)
 	if err != nil {
 		return err
 	}
@@ -38,7 +44,7 @@ func (event Event) Apply(c config.Config) error {
 }
 
 type EventInterface interface {
-	Apply(Event, config.Config) error
+	SaveReadDB(Event, config.Config) error
 }
 
 type AddTeacherEvent struct {
@@ -46,7 +52,7 @@ type AddTeacherEvent struct {
 	Teacher  TeacherInfo `json:"teacher"`
 }
 
-func (event AddTeacherEvent) Apply(ev Event, config config.Config) error {
+func (event AddTeacherEvent) SaveReadDB(ev Event, config config.Config) error {
 	dbConfig := config.Database
 	db := ConnectDb(dbConfig.User, dbConfig.Password, dbConfig.Database, dbConfig.Address)
 	defer db.Close()
@@ -78,35 +84,17 @@ type RemoveTeacherEvent struct {
 	Teacher  TeacherInfo `json:"teacher"`
 }
 
-func (event RemoveTeacherEvent) Apply(ev Event, config config.Config) error {
+func (event RemoveTeacherEvent) SaveReadDB(ev Event, config config.Config) error {
 	dbConfig := config.Database
 	db := ConnectDb(dbConfig.User, dbConfig.Password, dbConfig.Database, dbConfig.Address)
 	defer db.Close()
 
 	// Update read databse
-	_, err := db.Exec(`UPDATE course.class SET teacher_ids = array_remove(teacher_ids, ?) WHERE course_id = ?`,
-		event.Teacher.Id, event.CourseID)
+	_, err := db.Exec(`UPDATE course.class SET teacher_ids = array_remove(teacher_ids, ?), version = ? WHERE course_id = ?`,
+		event.Teacher.Id, ev.Version, event.CourseID)
 	if err != nil {
 		return err
 	}
 
 	return nil
-}
-
-func (class *Class) Transition(event Event) {
-	switch event.EventType {
-	case "TeacherRemoved":
-		pos := helper.GetPosStringElementInSlice(class.TeacherIDS, event.Data.(RemoveTeacherEvent).Teacher.Id)
-		if pos != -1 {
-			class.CourseID = event.Data.(RemoveTeacherEvent).CourseID
-			copy(class.TeacherIDS[pos:], class.TeacherIDS[pos+1:])
-			class.TeacherIDS[len(class.TeacherIDS)-1] = ""
-			class.TeacherIDS = class.TeacherIDS[:len(class.TeacherIDS)-1]
-		}
-	case "TeacherAdded":
-		class.CourseID = event.Data.(AddTeacherEvent).CourseID
-		class.TeacherIDS = append(class.TeacherIDS, event.Data.(AddTeacherEvent).Teacher.Id)
-	default:
-		fmt.Printf("nil ne")
-	}
 }

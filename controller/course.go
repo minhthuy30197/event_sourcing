@@ -71,9 +71,10 @@ func (c *Controller) Playback(ctx *gin.Context) {
 		return
 	}
 
-	class := &model.Class{}
+	class := &model.ClassTeacherAggregate{}
 	for _, event := range rs {
-		class.Transition(event)
+		class.Apply(event)
+		class.Version ++
 	}
 	ctx.JSON(http.StatusOK, class)
 }

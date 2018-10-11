@@ -44,7 +44,7 @@ func (c *Controller) SaveEvent(ev model.Event) error {
 	}
 
 	// Apply event. Neu loi thi rollback
-	err = ev.Apply(c.Config)
+	err = ev.SaveReadDB(c.Config)
 	if err != nil {
 		tx.Rollback()
 		log.Println("Loi khi update bang read")
@@ -134,6 +134,7 @@ func (c *Controller) Events(aggregateID string, startTime, endTime time.Time) ([
 
 		log.Printf("%s %s", time.Since(event.StartTime), query)
 	})
+
 	_, err := c.EventDB.Query(&events, `SELECT * FROM es.event_source WHERE aggregate_id = ? AND time >= ? AND time <= ? ORDER BY time`,
 		aggregateID, startTime, endTime)
 	if err != nil {
@@ -149,4 +150,40 @@ func (c *Controller) Events(aggregateID string, startTime, endTime time.Time) ([
 	}
 
 	return ret, nil
+}
+
+func (c *Controller) EventsByVersion(aggregateID string, startVersion int32, endVersion int32) ([]model.Event, error) {
+	ret := []model.Event{}
+	
+	return ret, nil
+}
+
+func (c *Controller) CreateSnapshot(aggregateID string, version int32, aggregate model.Aggregate) (model.Snapshot, error) {
+	var newSnapshot, latestSnapshot model.Snapshot
+	// Lay snapshot moi nhat
+	_, err := c.DB.Query(&latestSnapshot, `
+		SELECT * FROM es.snapshot
+		WHERE aggregate_id = ? ORDER BY version DESC LIMIT 1`)
+	if err != nil {
+		return model.Snapshot{}, nil
+	}
+
+	// Lay danh sach event sau snapshot
+	rs, err := c.EventsByVersion(aggregateID, latestSnapshot.Version, version)
+	if err != nil {
+		return model.Snapshot{}, nil
+	}
+
+	for _, event := range rs {
+		aggregate.Apply(event)
+	}
+
+	newSnapshot.Version = version
+	newSnapshot 
+
+	return newSnapshot, nil
+}
+
+func SaveSnapshot() error {
+	return nil
 }
