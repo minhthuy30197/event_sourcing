@@ -43,6 +43,19 @@ func (c *Controller) SaveEvent(ev model.Event) error {
 		return err
 	}
 
+	// Tao snapshot
+	if ev.Version % 1 == 0 {
+		aggregate := model.Aggregate {
+			Item: model.ClassTeacherAggregate{},
+		}
+		_, err := c.CreateSnapshot(ev.AggregateId, ev.Version, aggregate)
+		if err != nil {
+			tx.Rollback()
+			log.Println("Loi khi tao snapshot")
+			return err
+		}
+	}
+
 	// Apply event. Neu loi thi rollback
 	err = ev.SaveReadDB(c.Config)
 	if err != nil {
@@ -125,16 +138,6 @@ func (c *Controller) Events(aggregateID string, startTime, endTime time.Time) ([
 	events := []model.EventSource{}
 	ret := []model.Event{}
 
-	// Lay du lieu tu event sourcing
-	c.EventDB.OnQueryProcessed(func(event *pg.QueryProcessedEvent) {
-		query, err := event.FormattedQuery()
-		if err != nil {
-			panic(err)
-		}
-
-		log.Printf("%s %s", time.Since(event.StartTime), query)
-	})
-
 	_, err := c.EventDB.Query(&events, `SELECT * FROM es.event_source WHERE aggregate_id = ? AND time >= ? AND time <= ? ORDER BY time`,
 		aggregateID, startTime, endTime)
 	if err != nil {
@@ -153,19 +156,46 @@ func (c *Controller) Events(aggregateID string, startTime, endTime time.Time) ([
 }
 
 func (c *Controller) EventsByVersion(aggregateID string, startVersion int32, endVersion int32) ([]model.Event, error) {
+	log.Println("hihihi")
+	events := []model.EventSource{}
 	ret := []model.Event{}
-	
+
+	// Lay du lieu tu event sourcing
+	c.EventDB.OnQueryProcessed(func(event *pg.QueryProcessedEvent) {
+		query, err := event.FormattedQuery()
+		if err != nil {
+			panic(err)
+		}
+
+		log.Printf("%s %s", time.Since(event.StartTime), query)
+	})
+
+	_, err := c.EventDB.Query(&events, `SELECT * FROM es.event_source WHERE aggregate_id = ? AND version > ? AND version <= ? ORDER BY version ASC`,
+		aggregateID, startVersion, endVersion)
+	if err != nil {
+		return []model.Event{}, err
+	}
+	for _, event := range events {
+		ev, err := Decode(event)
+		if err != nil {
+			log.Println(err)
+			return []model.Event{}, err
+		}
+		ret = append(ret, ev)
+	}
+
 	return ret, nil
 }
 
 func (c *Controller) CreateSnapshot(aggregateID string, version int32, aggregate model.Aggregate) (model.Snapshot, error) {
 	var newSnapshot, latestSnapshot model.Snapshot
 	// Lay snapshot moi nhat
-	_, err := c.DB.Query(&latestSnapshot, `
+	_, err := c.EventDB.Query(&latestSnapshot, `
 		SELECT * FROM es.snapshot
-		WHERE aggregate_id = ? ORDER BY version DESC LIMIT 1`)
+		WHERE aggregate_id = ? ORDER BY version DESC LIMIT 1`, aggregateID)
 	if err != nil {
-		return model.Snapshot{}, nil
+		log.Println(err.Error())
+		return model.Snapshot{}, err
 	}
 
 	// Lay danh sach event sau snapshot
@@ -175,8 +205,10 @@ func (c *Controller) CreateSnapshot(aggregateID string, version int32, aggregate
 	}
 
 	for _, event := range rs {
+		log.Println(event.Data)
 		aggregate.Apply(event)
 	}
+	log.Println(aggregate.Item)
 
 	newSnapshot.Version = version
 

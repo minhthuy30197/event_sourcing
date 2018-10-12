@@ -61,7 +61,13 @@ func MigrationEventDb(db *pg.DB, schema string) error {
 
 	// Tạo table
 	var event EventSource
+	var snapshot Snapshot
 	err = createTable(&event, db)
+	if err != nil {
+		return err
+	}
+
+	err = createTable(&snapshot, db)
 	if err != nil {
 		return err
 	}
