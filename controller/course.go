@@ -10,8 +10,43 @@ import (
 	"github.com/minhthuy30197/event_sourcing/model"
 )
 
+func (c *Controller) TestVersion(ctx *gin.Context) {
+	// Lấy version
+	var version int32
+	_, err := c.DB.Query(&version, `SELECT version from course.class where course_id = '1'`)
+	if err != nil {
+		model.NewError(ctx, http.StatusBadRequest, errors.New("Không lay duoc thong tin lop."))
+		return
+	}
+
+	// Lay thong tin teacher can them
+	var newTeacher model.TeacherInfo
+	_, err = c.DB.Query(&newTeacher, `SELECT * from course.teacher where id = '3'`)
+	if err != nil {
+		model.NewError(ctx, http.StatusBadRequest, errors.New("Không lay duoc thong tin giang vien."))
+		return
+	}
+
+	// Tao event
+	var addTeacherEvent model.AddTeacherEvent
+	addTeacherEvent.Teacher = newTeacher
+	addTeacherEvent.CourseID = "1"
+	aggregateID := "ClassTeacher_1"
+	baseEvent := BuildBaseEvent(aggregateID, "", "TeacherAdded", addTeacherEvent, (version + 1))
+	agg := &model.ClassTeacher{}
+	err = c.SaveEvent(baseEvent, agg)
+	if err != nil {
+		log.Println(err)
+		model.NewError(ctx, http.StatusBadRequest, err)
+		return
+	} else {
+		log.Println("---------------------------")
+	}
+	ctx.String(http.StatusOK, "Them thành công")
+}
+
 func (c *Controller) AddTeacherToClass(ctx *gin.Context) {
-	var setTeacher model.SetTeacher
+	/*var setTeacher model.SetTeacher
 	err := ctx.ShouldBindJSON(&setTeacher)
 	if err != nil {
 		model.NewError(ctx, http.StatusBadRequest, err)
@@ -46,7 +81,7 @@ func (c *Controller) AddTeacherToClass(ctx *gin.Context) {
 		log.Println(err)
 		model.NewError(ctx, http.StatusBadRequest, errors.New("Không them duoc event."))
 		return
-	}
+	}*/
 
 	ctx.String(http.StatusOK, "Them thành công")
 }
@@ -77,7 +112,7 @@ func (c *Controller) Playback(ctx *gin.Context) {
 }
 
 func (c *Controller) RemoveTeacherFromClass(ctx *gin.Context) {
-	var setTeacher model.SetTeacher
+	/*var setTeacher model.SetTeacher
 	err := ctx.ShouldBindJSON(&setTeacher)
 	if err != nil {
 		model.NewError(ctx, http.StatusBadRequest, err)
@@ -112,7 +147,7 @@ func (c *Controller) RemoveTeacherFromClass(ctx *gin.Context) {
 		log.Println(err)
 		model.NewError(ctx, http.StatusBadRequest, errors.New("Không them duoc event."))
 		return
-	}
+	}*/
 
 	ctx.String(http.StatusOK, "Xoa Thành công")
 }

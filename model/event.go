@@ -9,9 +9,9 @@ import (
 
 type EventSource struct {
 	TableName   struct{}  `json:"table_name" sql:"es.event_source"`
-	AggregateId string    `json:"aggregate_id"`
+	AggregateId string    `json:"aggregate_id" sql:",pk"`
 	Time        time.Time `json:"time" sql:"default:now()"`
-	Version     int32     `json:"version"`
+	Version     int32     `json:"version" sql:",pk"`
 	Data        []string  `json:"data"`
 	EventType   string    `json:"event_type"`
 	UserID      string    `json:"user_id"`

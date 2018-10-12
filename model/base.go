@@ -26,10 +26,16 @@ func MigrationDb(db *pg.DB, schema string) error {
 		return err
 	}
 
+	_, err = db.Exec("CREATE SCHEMA IF NOT EXISTS es;")
+	if err != nil {
+		return err
+	}
+
 	// Tạo bảng
 	var course Course
 	var class Class
 	var teacher Teacher
+	
 	err = createTable(&course, db)
 	if err != nil {
 		return err
@@ -39,6 +45,18 @@ func MigrationDb(db *pg.DB, schema string) error {
 		return err
 	}
 	err = createTable(&teacher, db)
+	if err != nil {
+		return err
+	}
+
+	var event EventSource
+	var snapshot Snapshot
+	err = createTable(&event, db)
+	if err != nil {
+		return err
+	}
+
+	err = createTable(&snapshot, db)
 	if err != nil {
 		return err
 	}

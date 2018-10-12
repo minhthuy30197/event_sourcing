@@ -45,10 +45,10 @@ func main() {
 		panic(err)
 	}
 
-	err = model.MigrationEventDb(eventDb, config.ServiceName)
+	/*err = model.MigrationEventDb(eventDb, config.ServiceName)
 	if err != nil {
 		panic(err)
-	}
+	}*/
 
 	router.SetupRouter(ginMode, config, r, c)
 

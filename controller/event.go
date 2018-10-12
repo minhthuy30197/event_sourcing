@@ -7,45 +7,46 @@ import (
 	"log"
 	"time"
 
-	"github.com/go-pg/pg"
-	"github.com/minhthuy30197/event_sourcing/model"
 	"github.com/minhthuy30197/event_sourcing/constant"
+	"github.com/minhthuy30197/event_sourcing/model"
 )
 
 func (c *Controller) SaveEvent(ev model.Event, agg model.Aggregate) error {
-	tx, err := c.EventDB.Begin()
+	tx, err := c.DB.Begin()
 	if err != nil {
 		return err
 	}
 
 	// Kiem tra version
+
 	var version int32
-	_, err = c.EventDB.Query(&version, `SELECT version FROM es.event_source WHERE aggregate_id = ? ORDER BY time DESC LIMIT 1`, ev.AggregateId)
+	_, err = c.DB.Query(&version, `SELECT version FROM es.event_source WHERE aggregate_id = ? ORDER BY time DESC LIMIT 1`, ev.AggregateId)
 	if err != nil {
 		return err
 	}
-	if (version + 1) != ev.Version {
+	/*if (version + 1) != ev.Version {
+		log.Println("Nội dung này đang được chỉnh sửa bởi một người khác. Vui lòng thử lại sau.")
 		return errors.New("Nội dung này đang được chỉnh sửa bởi một người khác. Vui lòng thử lại sau.")
-	}
+	}*/
 
 	// Encode
+
 	eventDB, err := Encode(ev)
 	if err != nil {
 		log.Println("Encode loi")
 		return err
 	}
-
+	eventDB.Version = version + 1
 	// Insert EventDB
 	err = tx.Insert(&eventDB)
 	if err != nil {
-		log.Println(err)
-		log.Println("Insert loi")
 		tx.Rollback()
-		return err
+		log.Println("Nội dung này đang được chỉnh sửa bởi một người khác. Vui lòng thử lại sau.")
+		return errors.New("Nội dung này đang được chỉnh sửa bởi một người khác. Vui lòng thử lại sau.")
 	}
 
 	// Tao snapshot
-	if ev.Version % constant.CountVersionPerSnapshot == 0 {
+	if ev.Version%constant.CountVersionPerSnapshot == 0 {
 		snapshot, err := c.CreateSnapshot(agg, ev)
 		if err != nil {
 			tx.Rollback()
@@ -53,7 +54,7 @@ func (c *Controller) SaveEvent(ev model.Event, agg model.Aggregate) error {
 			return err
 		}
 
-		err = c.EventDB.Insert(&snapshot)
+		err = c.DB.Insert(&snapshot)
 		if err != nil {
 			tx.Rollback()
 			log.Println("Loi khi insert snapshot")
@@ -69,7 +70,8 @@ func (c *Controller) SaveEvent(ev model.Event, agg model.Aggregate) error {
 		return err
 	}
 
-	return tx.Commit()
+	tx.Commit()
+	return nil
 }
 
 func BuildBaseEvent(aggregateID, userID, eventType string, data model.EventInterface, version int32) model.Event {
@@ -117,7 +119,7 @@ func Decode(event model.EventSource) (model.Event, error) {
 	ret.Time = event.Time
 	ret.UserID = event.UserID
 	ret.Version = event.Version
-	
+
 	switch event.EventType {
 	case "TeacherAdded":
 		var tmp model.AddTeacherEvent
@@ -164,23 +166,13 @@ func (c *Controller) EventsByVersion(aggregateID string, startVersion int32, end
 	events := []model.EventSource{}
 	ret := []model.Event{}
 
-	// Lay du lieu tu event sourcing
-	c.EventDB.OnQueryProcessed(func(event *pg.QueryProcessedEvent) {
-		query, err := event.FormattedQuery()
-		if err != nil {
-			panic(err)
-		}
-
-		log.Printf("%s %s", time.Since(event.StartTime), query)
-	})
-
 	var query string
 	if endVersion != -1 {
 		query = `SELECT * FROM es.event_source WHERE aggregate_id = ? AND version > ? AND version < ? ORDER BY version ASC`
 	} else {
 		query = `SELECT * FROM es.event_source WHERE aggregate_id = ? AND version > ? ORDER BY version ASC`
 	}
-	_, err := c.EventDB.Query(&events, query, aggregateID, startVersion, endVersion)
+	_, err := c.DB.Query(&events, query, aggregateID, startVersion, endVersion)
 	if err != nil {
 		return []model.Event{}, err
 	}
@@ -198,7 +190,7 @@ func (c *Controller) EventsByVersion(aggregateID string, startVersion int32, end
 
 func (c *Controller) GetLatestSnapshot(aggregateID string, agg model.Aggregate) (error, int32) {
 	var latestSnapshot model.Snapshot
-	_, err := c.EventDB.Query(&latestSnapshot, `
+	_, err := c.DB.Query(&latestSnapshot, `
 		SELECT * FROM es.snapshot
 		WHERE aggregate_id = ? ORDER BY version DESC LIMIT 1`, aggregateID)
 	if err != nil {
@@ -213,7 +205,7 @@ func (c *Controller) GetLatestSnapshot(aggregateID string, agg model.Aggregate) 
 			return err, 0
 		}
 	}
-	
+
 	return nil, latestSnapshot.Version
 }
 
@@ -225,7 +217,7 @@ func (c *Controller) CreateSnapshot(agg model.Aggregate, event model.Event) (mod
 	if err != nil {
 		return model.Snapshot{}, err
 	}
-	
+
 	// Lay danh sach event sau snapshot
 	rs, err := c.EventsByVersion(event.AggregateId, latestVersion, event.Version)
 	if err != nil {
