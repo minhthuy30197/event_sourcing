@@ -1,11 +1,13 @@
 package model
 
 import (
+	"log"
+
 	"github.com/minhthuy30197/event_sourcing/helper"
 )
 
 type AggregateMethod interface {
-	Apply(Event)  
+	Apply(Event)
 }
 
 type Aggregate struct {
@@ -14,7 +16,7 @@ type Aggregate struct {
 
 func (aggregate *Aggregate) Apply(event Event) {
 	aggregate.Item.(AggregateMethod).Apply(event)
-} 
+}
 
 type ClassTeacherAggregate struct {
 	// Mã course (chuỗi ngẫu nhiên duy nhất)
@@ -27,7 +29,8 @@ type ClassTeacherAggregate struct {
 	Version int32 `json:"version"`
 }
 
-func (class *ClassTeacherAggregate) Apply(event Event) {
+func (class ClassTeacherAggregate) Apply(event Event) {
+	log.Println(event.EventType)
 	switch event.EventType {
 	case "TeacherRemoved":
 		pos := helper.GetPosStringElementInSlice(class.TeacherIDS, event.Data.(RemoveTeacherEvent).Teacher.Id)
@@ -40,5 +43,6 @@ func (class *ClassTeacherAggregate) Apply(event Event) {
 	case "TeacherAdded":
 		class.CourseID = event.Data.(AddTeacherEvent).CourseID
 		class.TeacherIDS = append(class.TeacherIDS, event.Data.(AddTeacherEvent).Teacher.Id)
+		log.Println(class.TeacherIDS)
 	}
 }
