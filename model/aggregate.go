@@ -1,48 +1,24 @@
 package model
 
-import (
-	"log"
-
-	"github.com/minhthuy30197/event_sourcing/helper"
-)
-
-type AggregateMethod interface {
-	Apply(Event)
+type Aggregate interface {
+	UpdateVersion()
 }
 
-type Aggregate struct {
-	Item interface{}
+type BaseAggregate struct {
+	Version int32 `json:"version"`
 }
 
-func (aggregate *Aggregate) Apply(event Event) {
-	aggregate.Item.(AggregateMethod).Apply(event)
+func (agg *BaseAggregate) UpdateVersion() {
+	agg.Version++
 }
 
-type ClassTeacherAggregate struct {
+type ClassTeacher struct {
 	// Mã course (chuỗi ngẫu nhiên duy nhất)
 	CourseID string `json:"course_id"`
 
 	// Tên hiển thị
 	TeacherIDS []string `json:"teacher_ids" pg:",array"`
 
-	// Version
-	Version int32 `json:"version"`
-}
-
-func (class ClassTeacherAggregate) Apply(event Event) {
-	log.Println(event.EventType)
-	switch event.EventType {
-	case "TeacherRemoved":
-		pos := helper.GetPosStringElementInSlice(class.TeacherIDS, event.Data.(RemoveTeacherEvent).Teacher.Id)
-		if pos != -1 {
-			class.CourseID = event.Data.(RemoveTeacherEvent).CourseID
-			copy(class.TeacherIDS[pos:], class.TeacherIDS[pos+1:])
-			class.TeacherIDS[len(class.TeacherIDS)-1] = ""
-			class.TeacherIDS = class.TeacherIDS[:len(class.TeacherIDS)-1]
-		}
-	case "TeacherAdded":
-		class.CourseID = event.Data.(AddTeacherEvent).CourseID
-		class.TeacherIDS = append(class.TeacherIDS, event.Data.(AddTeacherEvent).Teacher.Id)
-		log.Println(class.TeacherIDS)
-	}
+	// Base aggregate
+	BaseAggregate `json:"base_aggregate"`
 }

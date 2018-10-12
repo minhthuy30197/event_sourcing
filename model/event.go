@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/minhthuy30197/event_sourcing/config"
+	"github.com/minhthuy30197/event_sourcing/helper"
 )
 
 type EventSource struct {
@@ -29,7 +30,7 @@ type Event struct {
 	AggregateId string      `json:"aggregate_id"`
 	Time        time.Time   `json:"time" sql:"default:now()"`
 	Version     int32       `json:"version"`
-	Data        interface{} `json:"data"`
+	Data        EventInterface `json:"data"`
 	EventType   string      `json:"event_type"`
 	UserID      string      `json:"user_id"`
 	Revision    int32       `json:"revision"`
@@ -43,8 +44,20 @@ func (event Event) SaveReadDB(c config.Config) error {
 	return nil
 }
 
+func (event Event) Apply(agg Aggregate) error {
+	err := event.Data.(EventInterface).Apply(agg, event)
+	if err != nil {
+		return err
+	}
+
+	agg.UpdateVersion()
+
+	return nil
+}
+
 type EventInterface interface {
 	SaveReadDB(Event, config.Config) error
+	Apply(Aggregate, Event) error
 }
 
 type AddTeacherEvent struct {
@@ -97,4 +110,25 @@ func (event RemoveTeacherEvent) SaveReadDB(ev Event, config config.Config) error
 	}
 
 	return nil
+}
+
+func (event RemoveTeacherEvent) Apply(agg Aggregate, ev Event) error {
+	class := agg.(*ClassTeacher)
+	pos := helper.GetPosStringElementInSlice(class.TeacherIDS, event.Teacher.Id)
+	if pos != -1 {
+		class.CourseID = event.CourseID
+		copy(class.TeacherIDS[pos:], class.TeacherIDS[pos+1:])
+		class.TeacherIDS[len(class.TeacherIDS)-1] = ""
+		class.TeacherIDS = class.TeacherIDS[:len(class.TeacherIDS)-1]
+	}
+	
+	return nil
+}
+
+func (event AddTeacherEvent) Apply(agg Aggregate, ev Event) error {
+	class := agg.(*ClassTeacher)
+	class.CourseID = event.CourseID
+	class.TeacherIDS = append(class.TeacherIDS, event.Teacher.Id)
+
+	return nil 
 }
