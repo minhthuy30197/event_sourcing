@@ -179,7 +179,6 @@ func (c *Controller) CreateSnapshot(aggregateID string, version int32, aggregate
 	}
 
 	newSnapshot.Version = version
-	newSnapshot 
 
 	return newSnapshot, nil
 }
