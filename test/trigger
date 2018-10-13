@@ -1,0 +1,50 @@
+CREATE TRIGGER record_error
+  BEFORE INSERT ON es.event_source
+  FOR EACH ROW
+  EXECUTE PROCEDURE record_error();
+
+
+CREATE OR REPLACE FUNCTION record_error()
+  RETURNS trigger AS $record_error$
+DECLARE
+	tmp       integer;
+BEGIN
+ SELECT 1 INTO tmp FROM es.event_source WHERE version = NEW.version 
+	AND aggregate_id = NEW.aggregate_id
+ IF version > 0 THEN
+  RAISE notice 'Da ton tai';
+  return null
+ END IF;
+ RETURN NEW;
+EXCEPTION
+  WHEN raise exception THEN
+   RETURN null;
+END;
+$record_error$ LANGUAGE plpgsql;
+
+
+---------------------------
+CREATE TRIGGER record_error
+  INSTEAD OF INSERT ON es.event_source
+  FOR EACH ROW
+  EXECUTE PROCEDURE record_error();
+  
+
+CREATE OR REPLACE FUNCTION record_error()
+  RETURNS trigger AS $record_error$
+BEGIN
+IF EXISTS (
+      SELECT 1
+       FROM es.event_source WHERE version = NEW.version 
+		AND aggregate_id = NEW.aggregate_id
+	   )
+   THEN
+     RAISE unique_violation USING MESSAGE = 'Duplicate version';
+      return null;
+   ELSE 
+	INSERT INTO es.event_source
+     	VALUES(NEW.aggregate_id, NEW.time, NEW.version, NEW.data, NEW.event_type, NEW.user_id, NEW.revision);
+   END IF; 
+  return null;
+END;
+$record_error$ LANGUAGE plpgsql;

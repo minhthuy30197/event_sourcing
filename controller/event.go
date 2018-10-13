@@ -20,7 +20,7 @@ func (c *Controller) SaveEvent(ev model.Event, agg model.Aggregate) error {
 	// Kiem tra version
 
 	var version int32
-	_, err = c.DB.Query(&version, `SELECT version FROM es.event_source WHERE aggregate_id = ? ORDER BY time DESC LIMIT 1`, ev.AggregateId)
+	_, err = c.DB.Query(&version, `SELECT version FROM es.event_source WHERE aggregate_id = ? ORDER BY version DESC LIMIT 1`, ev.AggregateId)
 	if err != nil {
 		return err
 	}
@@ -38,10 +38,10 @@ func (c *Controller) SaveEvent(ev model.Event, agg model.Aggregate) error {
 	}
 	eventDB.Version = version + 1
 	// Insert EventDB
-	err = tx.Insert(&eventDB)
+	err = c.DB.Insert(&eventDB)
 	if err != nil {
 		tx.Rollback()
-		log.Println("Nội dung này đang được chỉnh sửa bởi một người khác. Vui lòng thử lại sau.")
+		log.Println("ERROR: ", err)
 		return errors.New("Nội dung này đang được chỉnh sửa bởi một người khác. Vui lòng thử lại sau.")
 	}
 
