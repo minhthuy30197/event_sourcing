@@ -25,7 +25,7 @@ $record_error$ LANGUAGE plpgsql;
 
 ---------------------------
 CREATE TRIGGER record_error
-  INSTEAD OF INSERT ON es.event_source
+  BEFORE INSERT ON es.event_source
   FOR EACH ROW
   EXECUTE PROCEDURE record_error();
   
@@ -42,9 +42,7 @@ IF EXISTS (
      RAISE unique_violation USING MESSAGE = 'Duplicate version';
       return null;
    ELSE 
-	INSERT INTO es.event_source
-     	VALUES(NEW.aggregate_id, NEW.time, NEW.version, NEW.data, NEW.event_type, NEW.user_id, NEW.revision);
+    return new;
    END IF; 
-  return null;
 END;
 $record_error$ LANGUAGE plpgsql;

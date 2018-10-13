@@ -11,5 +11,4 @@ func setupCourseRoutes(c *controller.Controller, api *gin.RouterGroup) {
 	api.PUT("/remove-teacher", c.RemoveTeacherFromClass)
 	api.GET("/get-teacher/:id", c.GetTeachersOfClass)
 	api.POST("/get-history/:id", c.GetHistory)
-	api.POST("/test-version", c.TestVersion)
 }

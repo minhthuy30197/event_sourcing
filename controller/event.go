@@ -17,47 +17,43 @@ func (c *Controller) SaveEvent(ev model.Event, agg model.Aggregate) error {
 		return err
 	}
 
-	// Kiem tra version
-
+	// Check version
 	var version int32
 	_, err = c.DB.Query(&version, `SELECT version FROM es.event_source WHERE aggregate_id = ? ORDER BY version DESC LIMIT 1`, ev.AggregateId)
 	if err != nil {
 		return err
 	}
-	/*if (version + 1) != ev.Version {
-		log.Println("Nội dung này đang được chỉnh sửa bởi một người khác. Vui lòng thử lại sau.")
+	if (version + 1) != ev.Version {
 		return errors.New("Nội dung này đang được chỉnh sửa bởi một người khác. Vui lòng thử lại sau.")
-	}*/
+	}
 
 	// Encode
-
 	eventDB, err := Encode(ev)
 	if err != nil {
-		log.Println("Encode loi")
+		log.Println("Encode lỗi")
 		return err
 	}
-	eventDB.Version = version + 1
+
 	// Insert EventDB
-	err = c.DB.Insert(&eventDB)
+	err = tx.Insert(&eventDB)
 	if err != nil {
 		tx.Rollback()
-		log.Println("ERROR: ", err)
-		return errors.New("Nội dung này đang được chỉnh sửa bởi một người khác. Vui lòng thử lại sau.")
+		return err
 	}
 
 	// Tao snapshot
-	if ev.Version%constant.CountVersionPerSnapshot == 0 {
+	if ev.Version % constant.CountVersionPerSnapshot == 0 {
 		snapshot, err := c.CreateSnapshot(agg, ev)
 		if err != nil {
 			tx.Rollback()
-			log.Println("Loi khi tao snapshot")
+			log.Println("Lỗi khi tạo snapshot")
 			return err
 		}
 
-		err = c.DB.Insert(&snapshot)
+		err = tx.Insert(&snapshot)
 		if err != nil {
 			tx.Rollback()
-			log.Println("Loi khi insert snapshot")
+			log.Println("Lỗi khi insert snapshot")
 			return err
 		}
 	}
@@ -66,7 +62,7 @@ func (c *Controller) SaveEvent(ev model.Event, agg model.Aggregate) error {
 	err = ev.SaveReadDB(c.Config)
 	if err != nil {
 		tx.Rollback()
-		log.Println("Loi khi update bang read")
+		log.Println("Lỗi khi update bảng read")
 		return err
 	}
 
@@ -145,7 +141,7 @@ func (c *Controller) Events(aggregateID string, startTime, endTime time.Time) ([
 	events := []model.EventSource{}
 	ret := []model.Event{}
 
-	_, err := c.EventDB.Query(&events, `SELECT * FROM es.event_source WHERE aggregate_id = ? AND time >= ? AND time <= ? ORDER BY time`,
+	_, err := c.DB.Query(&events, `SELECT * FROM es.event_source WHERE aggregate_id = ? AND time >= ? AND time <= ? ORDER BY time`,
 		aggregateID, startTime, endTime)
 	if err != nil {
 		return []model.Event{}, err

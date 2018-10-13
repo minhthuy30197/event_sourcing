@@ -10,43 +10,8 @@ import (
 	"github.com/minhthuy30197/event_sourcing/model"
 )
 
-func (c *Controller) TestVersion(ctx *gin.Context) {
-	// Lấy version
-	var version int32
-	_, err := c.DB.Query(&version, `SELECT version from course.class where course_id = '1'`)
-	if err != nil {
-		model.NewError(ctx, http.StatusBadRequest, errors.New("Không lay duoc thong tin lop."))
-		return
-	}
-
-	// Lay thong tin teacher can them
-	var newTeacher model.TeacherInfo
-	_, err = c.DB.Query(&newTeacher, `SELECT * from course.teacher where id = '3'`)
-	if err != nil {
-		model.NewError(ctx, http.StatusBadRequest, errors.New("Không lay duoc thong tin giang vien."))
-		return
-	}
-
-	// Tao event
-	var addTeacherEvent model.AddTeacherEvent
-	addTeacherEvent.Teacher = newTeacher
-	addTeacherEvent.CourseID = "1"
-	aggregateID := "ClassTeacher_1"
-	baseEvent := BuildBaseEvent(aggregateID, "", "TeacherAdded", addTeacherEvent, (version + 1))
-	agg := &model.ClassTeacher{}
-	err = c.SaveEvent(baseEvent, agg)
-	if err != nil {
-		log.Println(err)
-		model.NewError(ctx, http.StatusBadRequest, err)
-		return
-	} else {
-		log.Println("---------------------------")
-	}
-	ctx.String(http.StatusOK, "Them thành công")
-}
-
 func (c *Controller) AddTeacherToClass(ctx *gin.Context) {
-	/*var setTeacher model.SetTeacher
+	var setTeacher model.SetTeacher
 	err := ctx.ShouldBindJSON(&setTeacher)
 	if err != nil {
 		model.NewError(ctx, http.StatusBadRequest, err)
@@ -65,7 +30,7 @@ func (c *Controller) AddTeacherToClass(ctx *gin.Context) {
 	var newTeacher model.TeacherInfo
 	_, err = c.DB.Query(&newTeacher, `SELECT * from course.teacher where id = ?`, setTeacher.TeacherID)
 	if err != nil {
-		model.NewError(ctx, http.StatusBadRequest, errors.New("Không lay duoc thong tin giang vien."))
+		model.NewError(ctx, http.StatusBadRequest, errors.New("Không lấy được thông tin giảng viên."))
 		return
 	}
 
@@ -74,16 +39,19 @@ func (c *Controller) AddTeacherToClass(ctx *gin.Context) {
 	addTeacherEvent.Teacher = newTeacher
 	addTeacherEvent.CourseID = setTeacher.CourseID
 	aggregateID := "ClassTeacher_" + setTeacher.CourseID
-	baseEvent := BuildBaseEvent(aggregateID, "", "TeacherAdded", addTeacherEvent, (version + 1))
+	baseEvent := BuildBaseEvent(aggregateID, "", "TeacherAdded", addTeacherEvent, version + 1)
 	agg := &model.ClassTeacher{}
 	err = c.SaveEvent(baseEvent, agg)
 	if err != nil {
-		log.Println(err)
-		model.NewError(ctx, http.StatusBadRequest, errors.New("Không them duoc event."))
+		if err.Error() == `ERROR #23505 duplicate key value violates unique constraint "event_source_pkey"` {
+			model.NewError(ctx, http.StatusBadRequest, errors.New("Nội dung này đang được chỉnh sửa bởi một người khác. Vui lòng thử lại sau."))
+		} else {
+			model.NewError(ctx, http.StatusBadRequest, errors.New("Không thêm được event."))
+		}
 		return
-	}*/
+	}
 
-	ctx.String(http.StatusOK, "Them thành công")
+	ctx.String(http.StatusOK, "Thêm thành công")
 }
 
 func (c *Controller) Playback(ctx *gin.Context) {
@@ -100,7 +68,7 @@ func (c *Controller) Playback(ctx *gin.Context) {
 	rs, err := c.EventsByVersion(aggregateID, latestVersion, -1)
 	if err != nil {
 		log.Println(err)
-		model.NewError(ctx, http.StatusBadRequest, errors.New("Không thể lấy lich su."))
+		model.NewError(ctx, http.StatusBadRequest, errors.New("Không thể lấy lịch sử"))
 		return
 	}
 
@@ -112,26 +80,26 @@ func (c *Controller) Playback(ctx *gin.Context) {
 }
 
 func (c *Controller) RemoveTeacherFromClass(ctx *gin.Context) {
-	/*var setTeacher model.SetTeacher
+	var setTeacher model.SetTeacher
 	err := ctx.ShouldBindJSON(&setTeacher)
 	if err != nil {
 		model.NewError(ctx, http.StatusBadRequest, err)
 		return
 	}
-
+	
 	// Lấy version
 	var version int32
 	_, err = c.DB.Query(&version, `SELECT version from course.class where course_id = ?`, setTeacher.CourseID)
 	if err != nil {
-		model.NewError(ctx, http.StatusBadRequest, errors.New("Không lay duoc thong tin giang vien."))
+		model.NewError(ctx, http.StatusBadRequest, errors.New("Không lấy được thông tin version."))
 		return
 	}
-
+	
 	// Lay thong tin teacher can them
 	var newTeacher model.TeacherInfo
 	_, err = c.DB.Query(&newTeacher, `select * from course.teacher where id = ?`, setTeacher.TeacherID)
 	if err != nil {
-		model.NewError(ctx, http.StatusBadRequest, errors.New("Không lay duoc thong tin giang vien."))
+		model.NewError(ctx, http.StatusBadRequest, errors.New("Không lấy được thông tin giảng viên."))
 		return
 	}
 
@@ -140,16 +108,19 @@ func (c *Controller) RemoveTeacherFromClass(ctx *gin.Context) {
 	removeTeacherEvent.Teacher = newTeacher
 	removeTeacherEvent.CourseID = setTeacher.CourseID
 	aggregateID := "ClassTeacher_" + setTeacher.CourseID
-	baseEvent := BuildBaseEvent(aggregateID, "", "TeacherRemoved", removeTeacherEvent, (version + 1))
+	baseEvent := BuildBaseEvent(aggregateID, "", "TeacherRemoved", removeTeacherEvent, version + 1)
 	agg := &model.ClassTeacher{}
 	err = c.SaveEvent(baseEvent, agg)
 	if err != nil {
-		log.Println(err)
-		model.NewError(ctx, http.StatusBadRequest, errors.New("Không them duoc event."))
+		if err.Error() == `ERROR #23505 duplicate key value violates unique constraint "event_source_pkey"` {
+			model.NewError(ctx, http.StatusBadRequest, errors.New("Nội dung này đang được chỉnh sửa bởi một người khác. Vui lòng thử lại sau."))
+		} else {
+			model.NewError(ctx, http.StatusBadRequest, errors.New("Không thêm được event."))
+		}
 		return
-	}*/
+	}
 
-	ctx.String(http.StatusOK, "Xoa Thành công")
+	ctx.String(http.StatusOK, "Xoá Thành công")
 }
 
 func (c *Controller) GetTeachersOfClass(ctx *gin.Context) {
@@ -186,12 +157,11 @@ func (c *Controller) GetHistory(ctx *gin.Context) {
 	if err != nil {
 		endTime = time.Now()
 	}
-	log.Println(endTime)
-	log.Println(startTime)
+
 	rs, err := c.Events(aggregateID, startTime, endTime)
 	if err != nil {
 		log.Println(err)
-		model.NewError(ctx, http.StatusBadRequest, errors.New("Không thể lấy lich su."))
+		model.NewError(ctx, http.StatusBadRequest, errors.New("Không thể lấy lịch sử."))
 		return
 	}
 
