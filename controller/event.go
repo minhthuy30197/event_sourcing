@@ -2,7 +2,7 @@ package controller
 
 import (
 	"encoding/json"
-	"errors"
+
 	"fmt"
 	"log"
 	"time"
@@ -23,9 +23,9 @@ func (c *Controller) SaveEvent(ev model.Event, agg model.Aggregate) error {
 	if err != nil {
 		return err
 	}
-	if (version + 1) != ev.Version {
+	/*if (version + 1) != ev.Version {
 		return errors.New("Nội dung này đang được chỉnh sửa bởi một người khác. Vui lòng thử lại sau.")
-	}
+	}*/
 
 	// Encode
 	eventDB, err := Encode(ev)
@@ -33,6 +33,7 @@ func (c *Controller) SaveEvent(ev model.Event, agg model.Aggregate) error {
 		log.Println("Encode lỗi")
 		return err
 	}
+	eventDB.Version = version + 1
 
 	// Insert EventDB
 	err = tx.Insert(&eventDB)

@@ -43,7 +43,8 @@
             	Apply(Aggregate, Event) error
             }
         ```
-        =>  Các type event của aggregate cần triển khai (implement) interface EventInterface.
+        =>  Các type event của aggregate cần triển khai (implement) interface EventInterface. Method SaveReadDB thực hiện thao tác với các bảng lưu trữ trạng thái cuối cùng của aggregate dùng để query. Method Apply được dùng khi getHistory hoặc project, set trạng thái mới cho aggregate khi có event mới. 
+        => Với mỗi EventType, phải định nghĩa cách thức decode từ jsonb -> struct của Go trong hàm Decode. 
         Ví dụ: Event AddTeacherEvent 
         ```go
             type AddTeacherEvent struct {
@@ -72,9 +73,31 @@
             }
         ```
     * Interface Aggregate
-    * Struct BaseAggregate
-    => 
+        ```go
+            type Aggregate interface {
+                UpdateVersion()
+            }
+        ```
+    * Struct BaseAggregate: implement interface Aggregate
+        ```go
+            type BaseAggregate struct {
+                Version int32 `json:"version"`
+            }
+            func (agg *BaseAggregate) UpdateVersion() {
+                agg.Version++
+            }
+        ```
+        Định nghĩa truct aggregate chứa BaseAggregate. Ví dụ trong service-auth có aggregate User. Struct User có dạng:
+        ```go
+            type User struct {
+                ...
+                BaseAggregate
+            }
+        ```
+
+    Để thêm event, gọi method SaveEvent trong file controller/event.go.
 2. Tạo snapshot
+    Cách n version của aggregate thì tạo một snapshot. n được quy định trong constant. 
 3. Get Event stream 
 4. Project
 
