@@ -4,10 +4,12 @@
 * [Sách Domain Driven Design](https://www.amazon.com/Patterns-Principles-Practices-Domain-Driven-Design/dp/1118714709)
 * [Sourcecode tham khảo](https://github.com/z0mbie42/goes)
 * [Event Store trong Postgres](https://dev.to/kspeakman/event-storage-in-postgres-4dk2)
+
 ## Thiết kế CSDL
 * Mỗi một microservice lưu trữ một event store và danh sách snapshot riêng (nếu có).
 * Cấu trúc bảng:
     **Bảng event_store**: Lưu trữ event theo thời gian 
+
     | Tên cột | Kiểu dữ liệu | Chú thích | |
     | ------ | ------ | ------ | ------- |
     | AggregateID | string | Global unique id (ví dụ user_id) | PK|
@@ -19,8 +21,10 @@
     | UserID | string | Id của user tạo event | |
     | Revision | integer |  Phòng trường hợp cấu trúc event payload bị thay đổi không để de-serialize từ JSONP về Golang Struct. | |
     | TenantID | string | Id cuả tenant | |
+
     
     **Bảng snapshot**: Lưu tạm trạng thái trung gian, tránh việc phải project lại chuỗi quá nhiều event
+
     | Tên cột | Kiểu dữ liệu | Chú thích | |
     | ------ | ------ | ------ | ------- |
     | AggregateID | string | Global unique id (ví dụ user_id) | PK|
@@ -28,6 +32,7 @@
     | Version | integer| Version của aggregate tại thời điểm tạo snapshot | PK |
     | Data | jsonb | Trạng thái của aggregate tại thời điểm tạo snapshot | |
     | TenantID | string | Id của tenant | |
+    
     
 
 ## Code
